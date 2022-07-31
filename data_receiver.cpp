@@ -95,7 +95,8 @@ void receiveFromNet(SConfigV &configval, std::vector<SOneBuffer> &circular_buffe
     std::string local_ip_s = configval.local_ip;
     std::string remote_ip_s = configval.remote_ip;
 
-    // SCTP server
+    // SCTP server ======================
+
     int serer_fd, conn_fd, i, flags;
     struct sockaddr_in local_addr;
     struct sockaddr_in remote_addr;
@@ -125,34 +126,31 @@ void receiveFromNet(SConfigV &configval, std::vector<SOneBuffer> &circular_buffe
 
     socklen_t len = sizeof(remote_addr);
     conn_fd = accept(serer_fd, (struct sockaddr *)&remote_addr, &len);
-
-    memset((void *)&events, 0, sizeof(events));
-    events.sctp_data_io_event = 1;
-    setsockopt(conn_fd, SOL_SCTP, SCTP_EVENTS,
-               (const void *)&events, sizeof(events));
-
-    if (len > 0)
+        
+    if (len > 0) // Just for use len
     printf("Connected to %s\n",
             inet_ntop(AF_INET, &remote_addr.sin_addr, buff,
             sizeof(buff)));
+
+    //=========================================
 
     uint8_t writeBuffer[max_buffer_size] = {0};
 
     for (;;)
     {
+        int sent_n = 0;
         int recv_n = 0;
         do
         {
            recv_n = sctp_recvmsg(conn_fd, (void *)writeBuffer, max_buffer_size, (struct sockaddr *)NULL, 0, &sndrcvinfo, &flags);
         }     
-        while (recv_n < 0);
+        while (recv_n <= 0);
 
-        std::cout << "recv_n == " << recv_n << std::endl;
-
-        int sent_n = sctp_sendmsg(conn_fd, writeBuffer, recv_n, NULL, 0, 0, 0, 1, 0, 0);
-        
-        std::cout << "sent_n == " << sent_n << std::endl;
-
+        if ((sent_n = sctp_sendmsg(conn_fd, writeBuffer, recv_n, NULL, 0, 0, 0, 1, 0, 0)) <= 0)
+        {
+            std::cout << "Error: sent_n ==" << sent_n << "\n";
+            exit(1);
+        }
         recvStat.received_number_packages++;
 
         int nextElement = getNextElement(receiveDataInd.load(), circular_buffer.size());
@@ -185,7 +183,7 @@ void receiveFromNet(SConfigV &configval, std::vector<SOneBuffer> &circular_buffe
             recvStat.dropped_number_packages++;
         }
     }
-    // sock.close();
+    close(conn_fd);
 }
 
 //********************************************************************************
